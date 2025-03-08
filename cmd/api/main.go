@@ -25,8 +25,6 @@ func main() {
 
 	r := gin.Default()
 	
-	router.SetupRoutes(r, db)
-
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"

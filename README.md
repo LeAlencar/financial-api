@@ -2,7 +2,7 @@
 
 ### Integrantes:
 
-#### - João Paulo Ziggoto        RA: 
+#### - João Paulo Paggi Zuanon Dias  RA: 22.222.058-4 
 #### - Leandro de Brito Alencar  RA: 22.222.034-5
 #### - Mateus Rocha              RA: 22.222.002-2
 
@@ -51,7 +51,14 @@ O sistema segue uma arquitetura baseada em microsserviços com comunicação via
 
 • Permite implementar restrições de segurança e validações no nível do banco;
 
-• Facilita consultas complexas envolvendo dados de usuários.
+• Facilita consultas complexas envolvendo dados de usuários
+
+**Usando Supabase**
+• O Supabase oferece uma interface simplificada para gerenciar o PostgreSQL, facilitando a administração do banco;
+• Possui autenticação e autorização integradas, garantindo segurança no acesso aos dados;
+• Oferece suporte a WebSockets para atualizações em tempo real, útil para operações financeiras dinâmicas;
+• Conta com APIs automáticas para manipulação dos dados, acelerando o desenvolvimento;
+• Inclui armazenamento de arquivos e funções serverless, expandindo as possibilidades do projeto.
 
 ### MongoDB (DB1)
 

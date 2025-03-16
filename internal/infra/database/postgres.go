@@ -1,10 +1,9 @@
-
 // internal/infrastructure/database/postgres.go
 package database
 
 import (
 	"fmt"
-	"log"
+
 	"os"
 
 	"gorm.io/driver/postgres"
@@ -29,6 +28,5 @@ func NewPostgresConnection() (*gorm.DB, error) {
 		return nil, err
 	}
 
-	
 	return db, nil
 }

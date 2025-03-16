@@ -1,4 +1,3 @@
-
 // cmd/api/main.go
 package main
 
@@ -18,13 +17,13 @@ func init() {
 }
 
 func main() {
-	db, err := database.NewPostgresConnection()
+	_, err := database.NewPostgresConnection()
 	if err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 
 	r := gin.Default()
-	
+
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
 		port = "8080"

@@ -14,13 +14,13 @@ import (
 
 // UserService handles business logic related to users
 type UserService struct {
-	userRepo      *domain.UserRepository
+	userRepo      *repositories.UserRepository
 	jwtSecret     string
 	jwtExpiration time.Duration
 }
 
 // NewUserService creates a new user service
-func NewUserService(userRepo *domain.UserRepository, jwtSecret string, jwtExpiration time.Duration) *UserService {
+func NewUserService(userRepo *repositories.UserRepository, jwtSecret string, jwtExpiration time.Duration) *UserService {
 	return &UserService{
 		userRepo:      userRepo,
 		jwtSecret:     jwtSecret,

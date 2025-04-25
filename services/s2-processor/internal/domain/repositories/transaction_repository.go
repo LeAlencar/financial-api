@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/lealencar/financial-api/internal/domain/models"
+	"github.com/leandroalencar/banco-dados/services/s2-processor/internal/domain/models"
 	"gorm.io/gorm"
 )
 

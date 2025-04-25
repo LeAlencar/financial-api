@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/lealencar/financial-api/internal/domain/models"
+	"github.com/leandroalencar/banco-dados/shared/models"
 	"gorm.io/gorm"
 )
 
@@ -19,14 +19,14 @@ func NewAccountRepository(db *gorm.DB) *AccountRepository {
 }
 
 // Create adds a new account to the database
-func (r *AccountRepository) Create(ctx context.Context, account *models.Account) error {
+func (r *AccountRepository) Create(ctx context.Context, account *models.User) error {
 	return r.db.WithContext(ctx).Create(account).Error
 }
 
 // GetByID retrieves an account by ID
-func (r *AccountRepository) GetByID(ctx context.Context, id uint) (*models.Account, error) {
-	var account models.Account
-	if err := r.db.WithContext(ctx).First(&account, id).Error; err != nil {
+func (r *AccountRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
+	var account models.User
+	if err := r.db.WithContext(ctx).First(&account, "id = ?", id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.New("account not found")
 		}
@@ -36,8 +36,8 @@ func (r *AccountRepository) GetByID(ctx context.Context, id uint) (*models.Accou
 }
 
 // GetAllByUserID retrieves all accounts for a user
-func (r *AccountRepository) GetAllByUserID(ctx context.Context, userID uint) ([]models.Account, error) {
-	var accounts []models.Account
+func (r *AccountRepository) GetAllByUserID(ctx context.Context, userID string) ([]models.User, error) {
+	var accounts []models.User
 	if err := r.db.WithContext(ctx).Where("user_id = ?", userID).Find(&accounts).Error; err != nil {
 		return nil, err
 	}
@@ -45,20 +45,20 @@ func (r *AccountRepository) GetAllByUserID(ctx context.Context, userID uint) ([]
 }
 
 // Update updates an existing account
-func (r *AccountRepository) Update(ctx context.Context, account *models.Account) error {
+func (r *AccountRepository) Update(ctx context.Context, account *models.User) error {
 	return r.db.WithContext(ctx).Save(account).Error
 }
 
 // Delete removes an account from the database
-func (r *AccountRepository) Delete(ctx context.Context, id uint) error {
-	return r.db.WithContext(ctx).Delete(&models.Account{}, id).Error
+func (r *AccountRepository) Delete(ctx context.Context, id string) error {
+	return r.db.WithContext(ctx).Delete(&models.User{}, "id = ?", id).Error
 }
 
 // UpdateBalance updates the balance of an account
-func (r *AccountRepository) UpdateBalance(ctx context.Context, id uint, amount float64) error {
+func (r *AccountRepository) UpdateBalance(ctx context.Context, id string, amount float64) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var account models.Account
-		if err := tx.WithContext(ctx).First(&account, id).Error; err != nil {
+		var account models.User
+		if err := tx.WithContext(ctx).First(&account, "id = ?", id).Error; err != nil {
 			return err
 		}
 

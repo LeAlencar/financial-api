@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/lealencar/financial-api/internal/domain/models"
+	"github.com/leandroalencar/banco-dados/shared/models"
 	"gorm.io/gorm"
 )
 

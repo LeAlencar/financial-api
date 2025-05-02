@@ -8,7 +8,7 @@ import (
 )
 
 func TestConvertAPIToModel(t *testing.T) {
-	api := QuotationAPI{
+	api := models.QuotationAPI{
 		Code:      "USD",
 		Codein:    "BRL",
 		Bid:       "5.1234",

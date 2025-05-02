@@ -1,60 +1,95 @@
 package main
 
 import (
+	"encoding/json"
+	"io"
 	"log"
-	"math/rand"
+	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/leandroalencar/banco-dados/shared/models"
 	"github.com/leandroalencar/banco-dados/shared/utils"
 )
 
-func main() {
-	// Initialize RabbitMQ connection
-	rabbitmq, err := utils.NewRabbitMQ("amqp://guest:guest@rabbitmq:5672/")
+// ConvertAPIToModel converte a resposta da API para o model Quotation
+func ConvertAPIToModel(api models.QuotationAPI) (models.Quotation, error) {
+	buyPrice, err := strconv.ParseFloat(api.Bid, 64)
 	if err != nil {
-		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+		return models.Quotation{}, err
 	}
-	defer rabbitmq.Close()
-
-	// Start generating messages
-	for {
-		// Generate mock quotation
-		quotation := generateMockQuotation()
-		err = rabbitmq.PublishMessage("quotations", quotation)
-		if err != nil {
-			log.Printf("Error publishing quotation: %v", err)
-		}
-
-		// Generate mock transaction
-		transaction := generateMockTransaction()
-		err = rabbitmq.PublishMessage("transactions", transaction)
-		if err != nil {
-			log.Printf("Error publishing transaction: %v", err)
-		}
-
-		time.Sleep(5 * time.Second)
+	sellPrice, err := strconv.ParseFloat(api.Ask, 64)
+	if err != nil {
+		return models.Quotation{}, err
 	}
-}
+	tsInt, err := strconv.ParseInt(api.Timestamp, 10, 64)
+	if err != nil {
+		return models.Quotation{}, err
+	}
+	timestamp := time.Unix(tsInt, 0)
 
-func generateMockQuotation() models.Quotation {
 	return models.Quotation{
-		CurrencyPair:  "USD/BRL",
-		BuyPrice:      4.90 + rand.Float64()*0.10,
-		SellPrice:     5.00 + rand.Float64()*0.10,
-		Timestamp:     time.Now(),
-		LastUpdatedBy: "generator",
-	}
+		CurrencyPair:  api.Code + "/" + api.Codein,
+		BuyPrice:      buyPrice,
+		SellPrice:     sellPrice,
+		Timestamp:     timestamp,
+		LastUpdatedBy: "awesomeapi",
+	}, nil
 }
 
-func generateMockTransaction() models.Transaction {
-	transactionTypes := []models.TransactionType{models.Buy, models.Sell}
-	return models.Transaction{
-		UserID:       "user-" + string(rand.Intn(100)),
-		Type:         transactionTypes[rand.Intn(2)],
-		CurrencyPair: "USD/BRL",
-		Amount:       float64(rand.Intn(1000)) + rand.Float64(),
-		Status:       "PENDING",
-		Timestamp:    time.Now(),
+func main() {
+	// Conectar ao RabbitMQ
+	conn, ch, err := utils.ConnectRabbitMQ()
+	if err != nil {
+		log.Fatalf("Erro ao conectar no RabbitMQ: %v", err)
+	}
+	defer conn.Close()
+	defer ch.Close()
+
+	queueName := "cotacoes"
+
+	for {
+		// Buscar cotações da API
+		url := "https://economia.awesomeapi.com.br/json/daily/USD-BRL/4"
+		resp, err := http.Get(url)
+		if err != nil {
+			log.Printf("Erro ao buscar API: %v", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			log.Printf("Erro ao ler resposta da API: %v", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		// Deserializar para slice de QuotationAPI
+		var apiCotacoes []models.QuotationAPI
+		if err := json.Unmarshal(body, &apiCotacoes); err != nil {
+			log.Printf("Erro ao deserializar JSON: %v", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		// Converter e publicar cada cotação
+		for _, apiCotacao := range apiCotacoes {
+			cotacao, err := ConvertAPIToModel(apiCotacao)
+			if err != nil {
+				log.Printf("Erro ao converter cotação: %v", err)
+				continue
+			}
+			msg, _ := json.Marshal(cotacao)
+			err = utils.PublishMessage(ch, queueName, msg)
+			if err != nil {
+				log.Printf("Erro ao publicar no RabbitMQ: %v", err)
+			} else {
+				log.Printf("Cotação publicada: %s - Compra: %.2f, Venda: %.2f", cotacao.CurrencyPair, cotacao.BuyPrice, cotacao.SellPrice)
+			}
+		}
+
+		// Espera antes de buscar novamente
+		time.Sleep(30 * time.Second)
 	}
 }

@@ -109,3 +109,29 @@ func (r *RabbitMQ) Close() {
 		r.conn.Close()
 	}
 }
+
+// ConnectRabbitMQ estabelece conexão com o RabbitMQ
+func ConnectRabbitMQ() (*amqp.Connection, *amqp.Channel, error) {
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+	if err != nil {
+		return nil, nil, err
+	}
+	ch, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		return nil, nil, err
+	}
+	return conn, ch, nil
+}
+
+// PublishMessage publica uma mensagem na fila do RabbitMQ
+func PublishMessage(ch *amqp.Channel, queue string, body []byte) error {
+	_, err := ch.QueueDeclare(queue, false, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+	return ch.Publish("", queue, false, false, amqp.Publishing{
+		ContentType: "application/json",
+		Body:        body,
+	})
+}

@@ -50,7 +50,8 @@ func main() {
 
 	for {
 		// Buscar cotações da API
-		url := "https://economia.awesomeapi.com.br/json/daily/USD-BRL/4"
+		//url := "https://economia.awesomeapi.com.br/json/daily/USD-BRL/4"
+		url := "https://economia.awesomeapi.com.br/json/last/USD-BRL"
 		resp, err := http.Get(url)
 		if err != nil {
 			log.Printf("Erro ao buscar API: %v", err)
@@ -66,7 +67,7 @@ func main() {
 		}
 
 		// Deserializar para slice de QuotationAPI
-		var apiCotacoes []models.QuotationAPI
+		var apiCotacoes map[string]models.QuotationAPI
 		if err := json.Unmarshal(body, &apiCotacoes); err != nil {
 			log.Printf("Erro ao deserializar JSON: %v", err)
 			time.Sleep(10 * time.Second)

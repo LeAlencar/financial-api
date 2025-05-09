@@ -91,6 +91,6 @@ func main() {
 		}
 
 		// Espera antes de buscar novamente
-		time.Sleep(30 * time.Second)
+		time.Sleep(60 * time.Second)
 	}
 }

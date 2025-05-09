@@ -5,11 +5,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/leandroalencar/banco-dados/shared/models"
-	"github.com/leandroalencar/banco-dados/shared/utils"
+	"github.com/streadway/amqp"
 )
 
 func init() {
@@ -19,40 +21,48 @@ func init() {
 }
 
 func main() {
-	// Initialize RabbitMQ
-	rabbitmq, err := utils.NewRabbitMQ(os.Getenv("MESSAGE_BROKER_URL"))
+	// Connect to RabbitMQ
+	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
 		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
 	}
-	defer rabbitmq.Close()
+	defer conn.Close()
 
-	// Initialize Gin router
-	r := gin.Default()
-
-	// Health check endpoint
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"status": "healthy",
-		})
-	})
-
-	// User endpoints
-	r.POST("/users", createUser)
-	r.GET("/users/:id", getUser)
-
-	// Transaction endpoints
-	r.POST("/transactions", createTransaction)
-	r.GET("/transactions/:id", getTransaction)
-
-	// Quotation endpoints
-	r.GET("/quotations/latest", getLatestQuotation)
-
-	// Start the server
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Create channels for each service
+	userChan, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to open user channel: %v", err)
 	}
-	r.Run(":" + port)
+	defer userChan.Close()
+
+	quotationChan, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to open quotation channel: %v", err)
+	}
+	defer quotationChan.Close()
+
+	transactionChan, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Failed to open transaction channel: %v", err)
+	}
+	defer transactionChan.Close()
+
+	// Initialize services
+	userService := NewUserService(userChan)
+	quotationService := NewQuotationService(quotationChan)
+	transactionService := NewTransactionService(transactionChan)
+
+	// Start services
+	go userService.Start()
+	go quotationService.Start()
+	go transactionService.Start()
+
+	// Wait for interrupt signal
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+
+	log.Println("Shutting down services...")
 }
 
 func createUser(c *gin.Context) {

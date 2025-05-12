@@ -1,0 +1,18 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "internal/infra/database/queries"
+    schema: "internal/infra/database/migrations"
+    gen:
+      go:
+        package: "db"
+        out: "internal/infra/database/db"
+        sql_package: "pgx/v5"
+        emit_json_tags: true
+        emit_interface: true
+        emit_empty_slices: true
+        overrides:
+          - db_type: "pg_catalog.timestamp"
+            go_type: "time.Time"
+          - db_type: "pg_catalog.timestamptz"
+            go_type: "time.Time"

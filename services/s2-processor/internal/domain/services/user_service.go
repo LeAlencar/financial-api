@@ -3,6 +3,7 @@ package services
 import (
 	"context"
 	"errors"
+	"os"
 	"regexp"
 	"time"
 
@@ -14,100 +15,106 @@ import (
 
 // UserService handles business logic related to users
 type UserService struct {
-	userRepo      *repositories.AccountRepository
-	jwtSecret     string
-	jwtExpiration time.Duration
+	userRepo *repositories.UserRepository
 }
 
 // NewUserService creates a new user service
-func NewUserService(userRepo *repositories.AccountRepository, jwtSecret string, jwtExpiration time.Duration) *UserService {
+func NewUserService(userRepo *repositories.UserRepository) *UserService {
 	return &UserService{
-		userRepo:      userRepo,
-		jwtSecret:     jwtSecret,
-		jwtExpiration: jwtExpiration,
+		userRepo: userRepo,
 	}
 }
 
-// RegisterUserInput contains data needed to register a new user
-type RegisterUserInput struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=8"`
+// CreateUserInput contains data needed to create a new user
+type CreateUserInput struct {
 	Name     string `json:"name" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6"`
 }
 
-// RegisterUserOutput contains the result of a successful registration
-type RegisterUserOutput struct {
-	ID        string    `json:"id"`
-	Email     string    `json:"email"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	Token     string    `json:"token"`
+// LoginInput contains data needed to log in
+type LoginInput struct {
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required"`
 }
 
-// RegisterUser creates a new user account
-func (s *UserService) RegisterUser(ctx context.Context, input RegisterUserInput) (*RegisterUserOutput, error) {
-	// Validate email format
-	if !isValidEmail(input.Email) {
-		return nil, errors.New("invalid email format")
+// AuthResponse contains the result of a successful login
+type AuthResponse struct {
+	Token string      `json:"token"`
+	User  models.User `json:"user"`
+}
+
+// CreateUser creates a new user account
+func (s *UserService) CreateUser(ctx context.Context, input CreateUserInput) (*models.User, error) {
+	// Check if user already exists
+	existingUser, err := s.userRepo.GetByEmail(ctx, input.Email)
+	if err == nil && existingUser != nil {
+		return nil, errors.New("user already exists")
 	}
 
-	// Validate password strength
-	if !isStrongPassword(input.Password) {
-		return nil, errors.New("password must be at least 8 characters and include uppercase, lowercase, number, and special character")
-	}
-
-	// Create new user
-	_, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, errors.New("failed to hash password")
+		return nil, err
 	}
 
+	// Create new user with default balance of 0
 	user := &models.User{
-		Email:     input.Email,
 		Name:      input.Name,
-		Balance:   0,
+		Email:     input.Email,
+		Password:  string(hashedPassword),
+		Balance:   0, // Default balance
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	// Save user to database
 	if err := s.userRepo.Create(ctx, user); err != nil {
-		return nil, errors.New("failed to create user: " + err.Error())
+		return nil, err
+	}
+
+	return user, nil
+}
+
+// Login logs in a user
+func (s *UserService) Login(ctx context.Context, input LoginInput) (*AuthResponse, error) {
+	user, err := s.userRepo.GetByEmail(ctx, input.Email)
+	if err != nil {
+		return nil, errors.New("invalid credentials")
+	}
+
+	// Compare password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(input.Password))
+	if err != nil {
+		return nil, errors.New("invalid credentials")
 	}
 
 	// Generate JWT token
-	token, err := s.generateToken(user.ID)
+	token, err := generateJWT(user)
 	if err != nil {
-		return nil, errors.New("failed to generate token")
+		return nil, err
 	}
 
-	// Return user data and token
-	return &RegisterUserOutput{
-		ID:        user.ID,
-		Email:     user.Email,
-		Name:      user.Name,
-		CreatedAt: user.CreatedAt,
-		Token:     token,
+	return &AuthResponse{
+		Token: token,
+		User:  *user,
 	}, nil
 }
 
-// generateToken creates a new JWT token for a user
-func (s *UserService) generateToken(userID string) (string, error) {
-	// Set expiration time
-	expirationTime := time.Now().Add(s.jwtExpiration)
-
-	// Create claims
+// generateJWT creates a new JWT token for a user
+func generateJWT(user *models.User) (string, error) {
 	claims := jwt.MapClaims{
-		"user_id": userID,
-		"exp":     expirationTime.Unix(),
-		"iat":     time.Now().Unix(),
+		"user_id": user.ID,
+		"email":   user.Email,
+		"exp":     time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
 	}
 
-	// Create token with claims
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	secretKey := os.Getenv("JWT_SECRET_KEY")
+	if secretKey == "" {
+		secretKey = "your-default-secret-key" // You should set this in your .env file
+	}
 
-	// Sign the token with the secret key
-	tokenString, err := token.SignedString([]byte(s.jwtSecret))
+	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
 		return "", err
 	}
@@ -135,4 +142,8 @@ func isStrongPassword(password string) bool {
 	hasSpecial := regexp.MustCompile(`[!@#$%^&*(),.?":{}|<>]`).MatchString(password)
 
 	return hasUpper && hasLower && hasNumber && hasSpecial
+}
+
+func (s *UserService) GetUser(ctx context.Context, id uint) (*models.User, error) {
+	return s.userRepo.GetByID(ctx, id)
 }

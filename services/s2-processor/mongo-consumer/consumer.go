@@ -1,13 +1,39 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/streadway/amqp"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
+type Message struct {
+	Content   string    `bson:"content"`
+	Timestamp time.Time `bson:"timestamp"`
+}
+
 func main() {
+	// Conectar ao MongoDB
+	ctx := context.Background()
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
+	if err != nil {
+		log.Fatalf("Erro ao conectar no MongoDB: %v", err)
+	}
+	defer client.Disconnect(ctx)
+
+	// Verificar conexão com MongoDB
+	err = client.Ping(ctx, nil)
+	if err != nil {
+		log.Fatalf("Erro ao verificar conexão com MongoDB: %v", err)
+	}
+
+	// Obter coleção
+	collection := client.Database("financial").Collection("messages")
+
 	// Conectar ao RabbitMQ
 	conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
 	if err != nil {
@@ -53,6 +79,18 @@ func main() {
 
 	// Loop para receber mensagens
 	for msg := range msgs {
-		fmt.Printf("Mensagem recebida: %s\n", msg.Body)
+		message := Message{
+			Content:   string(msg.Body),
+			Timestamp: time.Now(),
+		}
+
+		// Salvar no MongoDB
+		_, err := collection.InsertOne(ctx, message)
+		if err != nil {
+			log.Printf("Erro ao salvar mensagem no MongoDB: %v", err)
+			continue
+		}
+
+		fmt.Printf("Mensagem recebida e salva: %s\n", msg.Body)
 	}
 }

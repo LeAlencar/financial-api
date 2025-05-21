@@ -3,12 +3,14 @@ package services
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"regexp"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/leandroalencar/banco-dados/services/s2-processor/internal/domain/repositories"
+	"github.com/leandroalencar/banco-dados/shared/messaging/events"
 	"github.com/leandroalencar/banco-dados/shared/models"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -42,6 +44,83 @@ type LoginInput struct {
 type AuthResponse struct {
 	Token string      `json:"token"`
 	User  models.User `json:"user"`
+}
+
+// ProcessUserEvent handles different types of user events
+func (s *UserService) ProcessUserEvent(ctx context.Context, event *events.UserEvent) error {
+	switch event.Action {
+	case events.UserActionCreate:
+		return s.handleCreate(ctx, event.Data)
+	case events.UserActionUpdate:
+		return s.handleUpdate(ctx, event.Data)
+	case events.UserActionDelete:
+		return s.handleDelete(ctx, event.Data)
+	default:
+		return fmt.Errorf("unknown action type: %s", event.Action)
+	}
+}
+
+func (s *UserService) handleCreate(ctx context.Context, data events.UserEventData) error {
+	// Hash the password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(data.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %v", err)
+	}
+
+	user := &models.User{
+		Name:      data.Name,
+		Email:     data.Email,
+		Password:  string(hashedPassword),
+		Balance:   0, // Default balance for new users
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := s.userRepo.Create(ctx, user); err != nil {
+		return fmt.Errorf("failed to create user: %v", err)
+	}
+
+	return nil
+}
+
+func (s *UserService) handleUpdate(ctx context.Context, data events.UserEventData) error {
+	// First get the existing user
+	user, err := s.userRepo.GetByID(ctx, uint(data.ID))
+	if err != nil {
+		return fmt.Errorf("failed to find user: %v", err)
+	}
+
+	// Update fields if provided
+	if data.Name != "" {
+		user.Name = data.Name
+	}
+	if data.Email != "" {
+		user.Email = data.Email
+	}
+	if data.Password != "" {
+		// Hash the new password
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(data.Password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash password: %v", err)
+		}
+		user.Password = string(hashedPassword)
+	}
+
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return fmt.Errorf("failed to update user: %v", err)
+	}
+
+	return nil
+}
+
+func (s *UserService) handleDelete(ctx context.Context, data events.UserEventData) error {
+	if err := s.userRepo.Delete(ctx, uint(data.ID)); err != nil {
+		return fmt.Errorf("failed to delete user: %v", err)
+	}
+
+	return nil
 }
 
 // CreateUser creates a new user account

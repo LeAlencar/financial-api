@@ -6,15 +6,24 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// User represents the complete user model for write operations
 type User struct {
-	ID        uint      `json:"id" gorm:"primaryKey"`
-	Email     string    `json:"email" gorm:"uniqueIndex;not null"`
-	Password  string    `json:"-" gorm:"not null"`
-	FirstName string    `json:"first_name"`
-	LastName  string    `json:"last_name"`
+	ID        int32     `json:"id"`
+	Name      string    `json:"name"`
+	Email     string    `json:"email"`
+	Password  string    `json:"-"` // Password is never exposed in JSON
+	Balance   float64   `json:"balance"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
-	Accounts  []Account `json:"accounts,omitempty" gorm:"foreignKey:UserID"`
+}
+
+// UserRepository defines the interface for user write operations
+type UserRepository interface {
+	Create(user *User) error
+	Update(user *User) error
+	Delete(id int32) error
+	GetByID(id int32) (*User, error)        // Needed for validation
+	GetByEmail(email string) (*User, error) // Needed for validation
 }
 
 func (u *User) HashPassword() error {

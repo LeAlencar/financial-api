@@ -2,6 +2,19 @@ package models
 
 import "time"
 
+type UserActionType string
+
+const (
+	UserActionCreate UserActionType = "CREATE"
+	UserActionUpdate UserActionType = "UPDATE"
+	UserActionDelete UserActionType = "DELETE"
+)
+
+type UserMessage struct {
+	Action UserActionType `json:"action"`
+	User   *User          `json:"user"`
+}
+
 type User struct {
 	ID        int32     `json:"id"`
 	Name      string    `json:"name"`

@@ -319,3 +319,92 @@ SELECT * FROM users WHERE id = $1;
    - Mantenha as migrações no controle de versão
    - Documente alterações significativas no esquema
    - Nunca modifique migrações já aplicadas em produção
+
+## Executando os Serviços
+
+O sistema foi simplificado para rodar com apenas dois comandos principais, um para cada serviço:
+
+### 1. Iniciando o Serviço Gerador (S1)
+
+Primeiro, configure as variáveis de ambiente no arquivo `.env` do S1:
+
+```env
+# Servidor HTTP
+PORT=8080
+
+# RabbitMQ
+RABBITMQ_URI=amqp://guest:guest@localhost:5672/
+
+# JWT (para autenticação)
+JWT_SECRET=seu_jwt_secret
+```
+
+Então execute:
+
+```bash
+cd services/s1-generator
+go run cmd/main.go
+```
+
+Este comando inicia o serviço S1 que:
+
+- Expõe endpoints HTTP para registro e autenticação de usuários
+- Gera cotações automáticas de moedas
+- Envia mensagens para o RabbitMQ
+
+### 2. Iniciando o Serviço Processador (S2)
+
+Configure as variáveis de ambiente no arquivo `.env` do S2:
+
+```env
+# RabbitMQ
+RABBITMQ_URI=amqp://guest:guest@localhost:5672/
+
+# PostgreSQL
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=sua_senha
+POSTGRES_DB=seu_banco
+
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=financial
+
+# Cassandra
+CASSANDRA_HOSTS=localhost
+CASSANDRA_KEYSPACE=seu_keyspace
+CASSANDRA_USERNAME=seu_usuario
+CASSANDRA_PASSWORD=sua_senha
+```
+
+Então execute:
+
+```bash
+cd services/s2-processor
+go run cmd/main.go
+```
+
+Este comando inicia o serviço S2 unificado que:
+
+- Processa mensagens de usuários (PostgreSQL)
+- Processa cotações (MongoDB)
+- Processa transações (Cassandra)
+- Gerencia todos os consumidores de forma centralizada
+
+### Pré-requisitos
+
+Antes de executar os serviços, certifique-se de que:
+
+1. O RabbitMQ está em execução
+2. Os bancos de dados estão disponíveis:
+   - PostgreSQL
+   - MongoDB
+   - Cassandra
+3. As variáveis de ambiente estão configuradas em cada serviço
+4. As migrações do banco de dados foram aplicadas
+
+### Observações
+
+- Mantenha os arquivos `.env` seguros e nunca os compartilhe ou commite no repositório
+- Para desenvolvimento local, você pode copiar o arquivo `.env.example` de cada serviço para criar seu próprio `.env`

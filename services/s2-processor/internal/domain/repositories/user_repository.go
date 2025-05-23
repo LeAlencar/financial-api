@@ -2,6 +2,8 @@ package repositories
 
 import (
 	"context"
+	"math"
+	"math/big"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -26,9 +28,12 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 
 // Create adds a new user to the database
 func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
-	// Always set initial balance to 0
-	balance := pgtype.Numeric{}
-	balance.Scan(0.00) // Set balance to 0
+	// Set initial balance to 1000 BRL for testing purposes
+	balance := pgtype.Numeric{
+		Int:   big.NewInt(100000), // 1000.00 represented as 100000 (with 2 decimal places)
+		Exp:   -2,                 // 2 decimal places
+		Valid: true,
+	}
 
 	// Convert time.Time to Timestamptz
 	createdAt := pgtype.Timestamptz{
@@ -55,6 +60,8 @@ func (r *UserRepository) Create(ctx context.Context, user *models.User) error {
 
 	// Update the user's ID with the one from the database
 	user.ID = dbUser.ID
+	// Set the balance in the user object too
+	user.Balance = 1000.00
 	return nil
 }
 
@@ -65,9 +72,14 @@ func (r *UserRepository) GetByID(ctx context.Context, id uint) (*models.User, er
 		return nil, err
 	}
 
-	// Convert Numeric to float64
+	// Convert Numeric to float64 using the simplest approach
 	var balance float64
-	dbUser.Balance.Scan(&balance)
+	if dbUser.Balance.Valid && dbUser.Balance.Int != nil {
+		// Try using Float64 method if available
+		f, _ := new(big.Float).SetInt(dbUser.Balance.Int).Float64()
+		// Apply the exponent
+		balance = f * math.Pow(10, float64(dbUser.Balance.Exp))
+	}
 
 	return &models.User{
 		ID:        dbUser.ID,
@@ -87,9 +99,14 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 		return nil, err
 	}
 
-	// Convert Numeric to float64
+	// Convert Numeric to float64 using the simplest approach
 	var balance float64
-	dbUser.Balance.Scan(&balance)
+	if dbUser.Balance.Valid && dbUser.Balance.Int != nil {
+		// Try using Float64 method if available
+		f, _ := new(big.Float).SetInt(dbUser.Balance.Int).Float64()
+		// Apply the exponent
+		balance = f * math.Pow(10, float64(dbUser.Balance.Exp))
+	}
 
 	return &models.User{
 		ID:        dbUser.ID,
@@ -104,8 +121,13 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*models.
 
 // Update updates an existing user
 func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
-	balance := pgtype.Numeric{}
-	balance.Scan(user.Balance)
+	// Convert float64 to pgtype.Numeric properly
+	balanceInt := int64(user.Balance * 100) // Convert to cents (2 decimal places)
+	balance := pgtype.Numeric{
+		Int:   big.NewInt(balanceInt),
+		Exp:   -2, // 2 decimal places
+		Valid: true,
+	}
 
 	updatedAt := pgtype.Timestamptz{
 		Time:  time.Now(),

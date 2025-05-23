@@ -12,6 +12,7 @@ import (
 	"github.com/leandroalencar/banco-dados/services/s2-processor/internal/domain/services"
 	"github.com/leandroalencar/banco-dados/services/s2-processor/internal/infra/database"
 	"github.com/leandroalencar/banco-dados/services/s2-processor/internal/infra/messaging"
+	"github.com/leandroalencar/banco-dados/shared/utils"
 )
 
 func main() {
@@ -45,18 +46,32 @@ func main() {
 	quotationRepo := repositories.NewQuotationRepository(mongoDB.GetDatabase())
 	quotationService := services.NewQuotationService(quotationRepo)
 
+	// Initialize currency transaction repository
+	currencyTransactionRepo := repositories.NewCurrencyTransactionRepository(mongoDB.GetDatabase())
+
 	// Initialize RabbitMQ connection URI
 	rabbitURI := os.Getenv("RABBITMQ_URI")
 	if rabbitURI == "" {
 		rabbitURI = "amqp://guest:guest@localhost:5672/"
 	}
 
+	// Initialize RabbitMQ for transaction service
+	rabbitmq, err := utils.NewRabbitMQ(rabbitURI)
+	if err != nil {
+		log.Fatalf("Failed to connect to RabbitMQ: %v", err)
+	}
+	defer rabbitmq.Close()
+
+	// Initialize transaction service
+	transactionService := services.NewTransactionService(userRepo, quotationRepo, currencyTransactionRepo, rabbitmq)
+
 	// Create consumers
 	userConsumer := messaging.NewUserConsumer(rabbitURI, userService)
 	quotationConsumer := messaging.NewQuotationConsumer(rabbitURI, quotationService)
+	transactionConsumer := messaging.NewTransactionConsumer(rabbitURI, transactionService)
 
 	// Create consumer manager
-	manager := messaging.NewConsumerManager(userConsumer, quotationConsumer)
+	manager := messaging.NewConsumerManager(userConsumer, quotationConsumer, transactionConsumer)
 
 	// Channel to handle graceful shutdown
 	stop := make(chan os.Signal, 1)

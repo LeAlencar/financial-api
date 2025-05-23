@@ -8,6 +8,7 @@ import (
 	"github.com/leandroalencar/banco-dados/shared/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 // QuotationRepository handles MongoDB operations for quotations
@@ -71,4 +72,23 @@ func (r *QuotationRepository) GetByDateRange(ctx context.Context, start, end tim
 	}
 
 	return quotations, nil
+}
+
+// GetLatestByCurrencyPair retrieves the most recent quotation for a specific currency pair
+func (r *QuotationRepository) GetLatestByCurrencyPair(ctx context.Context, currencyPair string) (*models.Quotation, error) {
+	filter := bson.M{"currency_pair": currencyPair}
+
+	// Sort by created_at descending to get the latest
+	opts := options.FindOne().SetSort(bson.D{{"created_at", -1}})
+
+	var quotation models.Quotation
+	err := r.collection.FindOne(ctx, filter, opts).Decode(&quotation)
+	if err != nil {
+		if err == mongo.ErrNoDocuments {
+			return nil, fmt.Errorf("no quotation found for currency pair: %s", currencyPair)
+		}
+		return nil, fmt.Errorf("failed to get latest quotation: %v", err)
+	}
+
+	return &quotation, nil
 }

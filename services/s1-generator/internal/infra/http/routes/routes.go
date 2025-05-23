@@ -27,11 +27,11 @@ type UpdateUserInput struct {
 }
 
 // SetupRouter configures all the routes for the application
-func SetupRouter(rabbitmq *utils.RabbitMQ, userService *services.UserService) *gin.Engine {
+func SetupRouter(rabbitmq *utils.RabbitMQ, userService *services.UserService, transactionService *services.TransactionService) *gin.Engine {
 	router := gin.Default()
 
 	// Create handlers
-	userHandler := handlers.NewUserHandler(userService, rabbitmq)
+	userHandler := handlers.NewUserHandler(userService, transactionService, rabbitmq)
 	authHandler := handlers.NewAuthHandler(userService)
 	quotationHandler := handlers.NewQuotationHandler(rabbitmq)
 
@@ -60,6 +60,13 @@ func SetupRouter(rabbitmq *utils.RabbitMQ, userService *services.UserService) *g
 			protectedUsers.GET("/:id", userHandler.GetUser)
 			protectedUsers.PATCH("/:id", userHandler.Update)
 			protectedUsers.DELETE("/:id", userHandler.Delete)
+		}
+		protectedTransactions := protected.Group("/transactions")
+		{
+			protectedTransactions.GET("/", userHandler.GetTransactions)
+			protectedTransactions.POST("/buy", userHandler.Buy)
+			protectedTransactions.POST("/sell", userHandler.Sell)
+
 		}
 	}
 

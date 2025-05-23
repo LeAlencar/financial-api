@@ -20,28 +20,196 @@ O objetivo principal é demonstrar como diferentes tipos de bancos de dados pode
 utilizados em conjunto para atender às necessidades específicas de cada tipo de dado,
 seguindo o princípio de "escolher o banco certo para o dado certo".
 
-A escolha deste tema foi desenvolvido com indicação do professor, gostamos da ideia sujerida,
-além de não ser um tema muito fora do que já foi visto durante o decorrer do curso de Ciência da Computação.
-
 ## Arquitetura do Sistema
 
-O sistema segue uma arquitetura baseada em microsserviços com comunicação via mensageria, conforme o modelo especificado:
+O sistema segue uma arquitetura baseada em microsserviços com comunicação via mensageria:
 
-• **S1:** Serviço gerador de mensagens (dados de usuários, cotações e transações);
+• **S1 (s1-generator):** Serviço gerador com API HTTP para usuários, transações e cotações;
 
-• **S2:** Serviços de processamento e armazenamento;
+• **S2 (s2-processor):** Serviço de processamento via RabbitMQ consumers;
 
-• **S3:** Serviço de log e validação de mensagens;
+• **S3 (s3-validator):** Serviço de log e validação de mensagens utilizando Cassandra;
 
-• **Mensageria:** Sistema de filas para comunicação entre serviços;
+• **Mensageria:** RabbitMQ para comunicação entre serviços;
 
-• **Bancos de Dados:** PostgreSQL (RDB), MongoDB (DB1) e Cassandra (DB2).
+• **Bancos de Dados:** PostgreSQL (usuários), MongoDB (transações e cotações).
+
+## Funcionalidades Implementadas
+
+### 🔐 Autenticação e Usuários
+
+- Registro de novos usuários com saldo inicial de R$ 1.000,00
+- Sistema de login com JWT
+- CRUD completo de usuários
+- Middleware de autenticação para rotas protegidas
+
+### 💱 Sistema de Câmbio
+
+- Compra e venda de moedas (USD/BRL)
+- Geração automática de cotações
+- Histórico completo de transações
+- Validação de saldo antes das operações
+
+### 📊 Banco de Dados Distribuído
+
+- **PostgreSQL:** Armazena dados dos usuários e seus saldos
+- **MongoDB:** Armazena transações de câmbio e cotações
+- **RabbitMQ:** Sistema de mensageria para comunicação assíncrona
+
+## API Endpoints
+
+### 🏥 Health Check
+
+```http
+GET /health
+```
+
+### 👤 Usuários
+
+#### Registro de Usuário
+
+```http
+POST /users/register
+Content-Type: application/json
+
+{
+  "name": "João Silva",
+  "email": "joao@email.com",
+  "password": "123456"
+}
+```
+
+#### Login
+
+```http
+POST /users/login
+Content-Type: application/json
+
+{
+  "email": "joao@email.com",
+  "password": "123456"
+}
+```
+
+#### Buscar Usuário (Autenticado)
+
+```http
+GET /users/{id}
+Authorization: Bearer {jwt_token}
+```
+
+#### Atualizar Usuário (Autenticado)
+
+```http
+PATCH /users/{id}
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "name": "João Santos",
+  "email": "joao.santos@email.com"
+}
+```
+
+#### Deletar Usuário (Autenticado)
+
+```http
+DELETE /users/{id}
+Authorization: Bearer {jwt_token}
+```
+
+### 💰 Transações
+
+#### Histórico de Transações (Autenticado)
+
+```http
+GET /transactions?limit=50
+Authorization: Bearer {jwt_token}
+```
+
+#### Comprar Moeda (Autenticado)
+
+```http
+POST /transactions/buy
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "amount": 100.0,
+  "currency_pair": "USD/BRL"
+}
+```
+
+#### Vender Moeda (Autenticado)
+
+```http
+POST /transactions/sell
+Authorization: Bearer {jwt_token}
+Content-Type: application/json
+
+{
+  "amount": 50.0,
+  "currency_pair": "USD/BRL"
+}
+```
+
+### 📈 Cotações
+
+#### Gerar Cotações
+
+```http
+POST /quotations/generate
+```
+
+## Exemplo de Uso Completo
+
+### 1. Registrar um novo usuário
+
+```bash
+curl -X POST http://localhost:8080/users/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Maria Silva",
+    "email": "maria@email.com",
+    "password": "123456"
+  }'
+```
+
+### 2. Fazer login
+
+```bash
+curl -X POST http://localhost:8080/users/login \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "maria@email.com",
+    "password": "123456"
+  }'
+```
+
+### 3. Comprar USD (usar o token do login)
+
+```bash
+curl -X POST http://localhost:8080/transactions/buy \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SEU_JWT_TOKEN_AQUI" \
+  -d '{
+    "amount": 100.0,
+    "currency_pair": "USD/BRL"
+  }'
+```
+
+### 4. Ver histórico de transações
+
+```bash
+curl -X GET http://localhost:8080/transactions \
+  -H "Authorization: Bearer SEU_JWT_TOKEN_AQUI"
+```
 
 ## Justificativa para Escolha dos Bancos de Dados
 
 ### PostgreSQL (RDB)
 
-**Dados armazenados**: Informações dos usuários (cadastro, dados pessoais, credenciais).
+**Dados armazenados**: Informações dos usuários (cadastro, dados pessoais, credenciais, saldo).
 
 **Justificativa:**
 
@@ -55,108 +223,120 @@ O sistema segue uma arquitetura baseada em microsserviços com comunicação via
 
 • Facilita consultas complexas envolvendo dados de usuários;
 
-• Containerização com Docker facilita a configuração e manutenção do ambiente;
-
 • Excelente suporte para backups e recuperação de dados;
 
 • Alta confiabilidade e maturidade para dados críticos do negócio.
 
 ### MongoDB (DB1)
 
-**Dados armazenados**: Dados da moeda (cotações, variações, histórico de preços).
+**Dados armazenados**: Transações de câmbio, cotações e histórico de preços.
 
 **Justificativa:**
 
 • O MongoDB é um banco de dados NoSQL orientado a documentos;
 
-• Ideal para armazenar dados de cotação que podem variar em estrutura ao longo do tempo;
+• Ideal para armazenar dados de transações que podem variar em estrutura ao longo do tempo;
 
-• Permite consultas rápidas e eficientes para recuperar histórico de preços;
+• Permite consultas rápidas e eficientes para recuperar histórico de transações;
 
-• Oferece boa performance para operações de leitura frequentes (consultas de cotação);
+• Oferece boa performance para operações de leitura frequentes (consultas de transações);
 
-• Facilita o armazenamento de dados semi-estruturados como informações de mercado;
+• Facilita o armazenamento de dados semi-estruturados como informações de cotações;
 
 • Escalabilidade horizontal para lidar com grandes volumes de dados históricos.
 
-### Cassandra (DB2)
+## Configuração e Execução
 
-**Dados armazenados:** Registros de transações de compra e venda.
+### Pré-requisitos
 
-**Justificativa:**
+1. **Go 1.21+**
+2. **Docker e Docker Compose**
+3. **PostgreSQL** (via Docker)
+4. **MongoDB** (via Docker)
+5. **RabbitMQ** (via Docker)
 
-• O Cassandra é um banco de dados NoSQL orientado a colunas, projetado para alta disponibilidade e escalabilidade;
+### Variáveis de Ambiente
 
-• Excelente para operações de escrita intensiva, como o registro de transações de compra e venda;
+#### S1-Generator (.env)
 
-• Arquitetura distribuída que permite processamento de grande volume de transações;
+```env
+# Servidor HTTP
+PORT=8080
 
-• Modelo de dados otimizado para consultas por timestamp, ideal para histórico de transações;
+# JWT
+JWT_SECRET_KEY=seu_jwt_secret_super_seguro
 
-• Alta disponibilidade sem ponto único de falha, essencial para um sistema financeiro;
+# PostgreSQL
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=financial
 
-• Excelente desempenho para escritas sequenciais, como logs de transações em ordem cronológica.
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=financial
 
-## Implementação do Serviço S2
+# RabbitMQ
+RABBITMQ_URI=amqp://guest:guest@localhost:5672/
+```
 
-O serviço S2 será implementado como um conjunto de microserviços responsáveis por:
+#### S2-Processor (.env)
 
-1. **Processador de Dados de Usuário:**
+```env
+# RabbitMQ
+RABBITMQ_URI=amqp://guest:guest@localhost:5672/
 
-▪ Recebe mensagens relacionadas a usuários da fila de mensageria;
+# PostgreSQL
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=financial
 
-▪ Valida e processa os dados;
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=financial
+```
 
-▪ Armazena ou recupera informações no PostgreSQL;
+### Executando o Sistema
 
-▪ Retorna resultados via mensageria;
+#### 1. Iniciar os Bancos de Dados
 
-2. **Processador de Cotações:**
+```bash
+docker-compose up -d
+```
 
-▪ Consome mensagens com dados de cotação de moedas;
+#### 2. Executar as Migrações (se necessário)
 
-▪ Processa, normaliza e enriquece os dados;
+```bash
+cd services/s2-processor/internal/infra/database/migrations
+tern migrate
+```
 
-▪ Armazena no MongoDB para consultas rápidas;
+#### 3. Iniciar o S2-Processor (Consumidores)
 
-▪ Publica atualizações de cotação para outros serviços.
+```bash
+cd services/s2-processor
+go run cmd/main.go
+```
 
-3. **Processador de Transações:**
+#### 4. Iniciar o S1-Generator (API HTTP)
 
-▪ Recebe solicitações de compra/venda;
+```bash
+cd services/s1-generator
+go run cmd/main.go
+```
 
-▪ Valida a operação contra dados do usuário (PostgreSQL);
-
-▪ Verifica cotações atuais (MongoDB);
-
-▪ Registra a transação no Cassandra;
-
-▪ Retorna confirmação ou erro via mensageria.
-
-Cada componente do S2 será implementado como um serviço independente,
-permitindo escalabilidade individual conforme a demanda.
-A comunicação entre os componentes será realizada exclusivamente via sistema de mensageria,
-garantindo baixo acoplamento e alta resiliência.
-
-O serviço S2 implementará padrões como Circuit Breaker para lidar com falhas nos bancos de dados
-e Retry Pattern para garantir a consistência eventual das operações.
+O sistema estará disponível em `http://localhost:8080`
 
 ## Fluxo de Dados
 
-1. S1 gera mensagens com dados fictícios (usuários, cotações, solicitações de transação).
-
-2. As mensagens são enviadas para o sistema de mensageria.
-
-3. S2 consome as mensagens e realiza o processamento adequado.
-
-4. S2 armazena ou recupera dados dos bancos apropriados.
-
-5. S2 retorna resultados via mensageria.
-
-6. S3 registra todas as mensagens enviadas e recebidas para auditoria e validação.
-
-Este fluxo garante que cada tipo de dado seja tratado pelo banco mais adequado às suas características,
-otimizando o desempenho e a confiabilidade do sistema.
+1. **Usuário se registra** → S1 envia evento via RabbitMQ → S2 processa e salva no PostgreSQL
+2. **Usuário faz login** → S1 autentica direto no PostgreSQL e retorna JWT
+3. **Usuário compra/vende moeda** → S1 envia evento via RabbitMQ → S2 processa e salva no MongoDB
+4. **Usuário consulta transações** → S1 busca diretamente no MongoDB
+5. **Sistema gera cotações** → S1 envia evento via RabbitMQ → S2 processa e salva no MongoDB
 
 ## Gerenciamento do Banco de Dados
 
@@ -188,18 +368,6 @@ docker exec -it postgres psql -U postgres
 
 ```bash
 docker-compose down
-```
-
-#### Variáveis de Ambiente
-
-Configure as seguintes variáveis no arquivo `.env`:
-
-```env
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_NAME=your_database
 ```
 
 ### Migrações com Tern
@@ -320,91 +488,10 @@ SELECT * FROM users WHERE id = $1;
    - Documente alterações significativas no esquema
    - Nunca modifique migrações já aplicadas em produção
 
-## Executando os Serviços
+## Observações de Segurança
 
-O sistema foi simplificado para rodar com apenas dois comandos principais, um para cada serviço:
-
-### 1. Iniciando o Serviço Gerador (S1)
-
-Primeiro, configure as variáveis de ambiente no arquivo `.env` do S1:
-
-```env
-# Servidor HTTP
-PORT=8080
-
-# RabbitMQ
-RABBITMQ_URI=amqp://guest:guest@localhost:5672/
-
-# JWT (para autenticação)
-JWT_SECRET=seu_jwt_secret
-```
-
-Então execute:
-
-```bash
-cd services/s1-generator
-go run cmd/main.go
-```
-
-Este comando inicia o serviço S1 que:
-
-- Expõe endpoints HTTP para registro e autenticação de usuários
-- Gera cotações automáticas de moedas
-- Envia mensagens para o RabbitMQ
-
-### 2. Iniciando o Serviço Processador (S2)
-
-Configure as variáveis de ambiente no arquivo `.env` do S2:
-
-```env
-# RabbitMQ
-RABBITMQ_URI=amqp://guest:guest@localhost:5672/
-
-# PostgreSQL
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=sua_senha
-POSTGRES_DB=seu_banco
-
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017
-MONGODB_DATABASE=financial
-
-# Cassandra
-CASSANDRA_HOSTS=localhost
-CASSANDRA_KEYSPACE=seu_keyspace
-CASSANDRA_USERNAME=seu_usuario
-CASSANDRA_PASSWORD=sua_senha
-```
-
-Então execute:
-
-```bash
-cd services/s2-processor
-go run cmd/main.go
-```
-
-Este comando inicia o serviço S2 unificado que:
-
-- Processa mensagens de usuários (PostgreSQL)
-- Processa cotações (MongoDB)
-- Processa transações (Cassandra)
-- Gerencia todos os consumidores de forma centralizada
-
-### Pré-requisitos
-
-Antes de executar os serviços, certifique-se de que:
-
-1. O RabbitMQ está em execução
-2. Os bancos de dados estão disponíveis:
-   - PostgreSQL
-   - MongoDB
-   - Cassandra
-3. As variáveis de ambiente estão configuradas em cada serviço
-4. As migrações do banco de dados foram aplicadas
-
-### Observações
-
-- Mantenha os arquivos `.env` seguros e nunca os compartilhe ou commite no repositório
-- Para desenvolvimento local, você pode copiar o arquivo `.env.example` de cada serviço para criar seu próprio `.env`
+- **Nunca compartilhe** arquivos `.env` ou os commite no repositório
+- Use **senhas fortes** para JWT_SECRET_KEY em produção
+- Configure **CORS** adequadamente para produção
+- Implemente **rate limiting** nas APIs públicas
+- Use **HTTPS** em produção

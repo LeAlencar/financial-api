@@ -68,10 +68,10 @@ func (s *UserService) handleCreate(ctx context.Context, data events.UserEventDat
 	}
 
 	user := &models.User{
-		Name:      data.Name,
-		Email:     data.Email,
-		Password:  string(hashedPassword),
-		Balance:   0, // Default balance for new users
+		Name:     data.Name,
+		Email:    data.Email,
+		Password: string(hashedPassword),
+		// Balance will be set by repository to R$ 1000
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
@@ -137,12 +137,12 @@ func (s *UserService) CreateUser(ctx context.Context, input CreateUserInput) (*m
 		return nil, err
 	}
 
-	// Create new user with default balance of 0
+	// Create new user - balance will be set by repository to R$ 1000
 	user := &models.User{
-		Name:      input.Name,
-		Email:     input.Email,
-		Password:  string(hashedPassword),
-		Balance:   0, // Default balance
+		Name:     input.Name,
+		Email:    input.Email,
+		Password: string(hashedPassword),
+		// Balance will be set by repository to R$ 1000
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}

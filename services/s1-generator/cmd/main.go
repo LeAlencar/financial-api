@@ -19,17 +19,27 @@ func main() {
 		log.Println("Warning: Error loading .env file")
 	}
 
-	// Initialize Database
+	// Initialize PostgreSQL Database
 	ctx := context.Background()
 	db, err := database.NewPostgresConnection(ctx)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		log.Fatalf("Failed to connect to PostgreSQL: %v", err)
 	}
 	defer db.Close()
+
+	// Initialize MongoDB
+	mongoDB, err := database.ConnectMongoDB()
+	if err != nil {
+		log.Fatalf("Failed to connect to MongoDB: %v", err)
+	}
 
 	// Initialize repositories and services
 	userRepo := repositories.NewUserRepository(db.GetPool())
 	userService := services.NewUserService(userRepo)
+
+	// Initialize transaction repository and service
+	currencyTransactionRepo := repositories.NewCurrencyTransactionRepository(mongoDB)
+	transactionService := services.NewTransactionService(currencyTransactionRepo)
 
 	// Initialize RabbitMQ
 	rabbitURI := os.Getenv("RABBITMQ_URI")
@@ -44,7 +54,7 @@ func main() {
 	defer rabbitmq.Close()
 
 	// Start HTTP server
-	router := routes.SetupRouter(rabbitmq, userService)
+	router := routes.SetupRouter(rabbitmq, userService, transactionService)
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"

@@ -3,9 +3,13 @@ package repositories
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/leandroalencar/banco-dados/services/s1-generator/internal/domain/models"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"gorm.io/gorm"
 )
 
@@ -102,4 +106,40 @@ func (r *TransactionRepository) Update(ctx context.Context, transaction *models.
 // Delete removes a transaction from the database
 func (r *TransactionRepository) Delete(ctx context.Context, id uint) error {
 	return r.db.WithContext(ctx).Delete(&models.Transaction{}, id).Error
+}
+
+// TransactionRepository handles MongoDB operations for transactions
+type TransactionRepositoryMongo struct {
+	collection *mongo.Collection
+}
+
+// NewTransactionRepository creates a new transaction repository
+func NewTransactionRepositoryMongo(db *mongo.Database) *TransactionRepositoryMongo {
+	return &TransactionRepositoryMongo{
+		collection: db.Collection("currency_transactions"),
+	}
+}
+
+// GetByUserID retrieves transactions for a specific user
+func (r *TransactionRepositoryMongo) GetByUserID(ctx context.Context, userID string, limit int) ([]*models.Transaction, error) {
+	filter := bson.M{"user_id": userID}
+
+	// Sort by timestamp descending to get the latest transactions
+	opts := options.Find().SetSort(bson.D{{"timestamp", -1}})
+	if limit > 0 {
+		opts.SetLimit(int64(limit))
+	}
+
+	cursor, err := r.collection.Find(ctx, filter, opts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query transactions: %v", err)
+	}
+	defer cursor.Close(ctx)
+
+	var transactions []*models.Transaction
+	if err := cursor.All(ctx, &transactions); err != nil {
+		return nil, fmt.Errorf("failed to decode transactions: %v", err)
+	}
+
+	return transactions, nil
 }

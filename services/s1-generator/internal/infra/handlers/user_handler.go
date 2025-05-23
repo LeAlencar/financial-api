@@ -3,6 +3,8 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/leandroalencar/banco-dados/services/s1-generator/internal/domain/services"
@@ -11,8 +13,9 @@ import (
 )
 
 type UserHandler struct {
-	userService *services.UserService
-	rabbitmq    *utils.RabbitMQ
+	userService        *services.UserService
+	transactionService *services.TransactionService
+	rabbitmq           *utils.RabbitMQ
 }
 
 type CreateUserInput struct {
@@ -21,10 +24,17 @@ type CreateUserInput struct {
 	Password string `json:"password" binding:"required,min=6"`
 }
 
-func NewUserHandler(userService *services.UserService, rabbitmq *utils.RabbitMQ) *UserHandler {
+type TransactionInput struct {
+	Amount       float64 `json:"amount" binding:"required,gt=0"`
+	CurrencyPair string  `json:"currency_pair" binding:"required"`
+	QuotationID  string  `json:"quotation_id,omitempty"`
+}
+
+func NewUserHandler(userService *services.UserService, transactionService *services.TransactionService, rabbitmq *utils.RabbitMQ) *UserHandler {
 	return &UserHandler{
-		userService: userService,
-		rabbitmq:    rabbitmq,
+		userService:        userService,
+		transactionService: transactionService,
+		rabbitmq:           rabbitmq,
 	}
 }
 
@@ -158,5 +168,134 @@ func (h *UserHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusAccepted, gin.H{
 		"message": "User deletion request accepted",
 		"user_id": userID,
+	})
+}
+
+func (h *UserHandler) Buy(c *gin.Context) {
+	// Get user ID from context (set by auth middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var input TransactionInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Create transaction event data
+	eventData := events.TransactionEventData{
+		UserID:       fmt.Sprintf("%v", userID),
+		CurrencyPair: input.CurrencyPair,
+		Amount:       input.Amount,
+		QuotationID:  input.QuotationID,
+		Timestamp:    time.Now(),
+	}
+
+	// Create message with action type
+	message := &events.TransactionEvent{
+		Action: events.TransactionActionBuy,
+		Data:   eventData,
+	}
+
+	// Send to RabbitMQ
+	err := h.rabbitmq.PublishMessage("transactions", message)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process buy transaction"})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message": "Buy transaction request accepted",
+		"transaction": gin.H{
+			"user_id":       eventData.UserID,
+			"currency_pair": eventData.CurrencyPair,
+			"amount":        eventData.Amount,
+			"type":          "BUY",
+			"timestamp":     eventData.Timestamp,
+		},
+	})
+}
+
+func (h *UserHandler) Sell(c *gin.Context) {
+	// Get user ID from context (set by auth middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	var input TransactionInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Create transaction event data
+	eventData := events.TransactionEventData{
+		UserID:       fmt.Sprintf("%v", userID),
+		CurrencyPair: input.CurrencyPair,
+		Amount:       input.Amount,
+		QuotationID:  input.QuotationID,
+		Timestamp:    time.Now(),
+	}
+
+	// Create message with action type
+	message := &events.TransactionEvent{
+		Action: events.TransactionActionSell,
+		Data:   eventData,
+	}
+
+	// Send to RabbitMQ
+	err := h.rabbitmq.PublishMessage("transactions", message)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process sell transaction"})
+		return
+	}
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message": "Sell transaction request accepted",
+		"transaction": gin.H{
+			"user_id":       eventData.UserID,
+			"currency_pair": eventData.CurrencyPair,
+			"amount":        eventData.Amount,
+			"type":          "SELL",
+			"timestamp":     eventData.Timestamp,
+		},
+	})
+}
+
+func (h *UserHandler) GetTransactions(c *gin.Context) {
+	// Get user ID from context (set by auth middleware)
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+
+	// Get limit from query parameter (default to 50)
+	limitStr := c.DefaultQuery("limit", "50")
+	limit := 50
+	if l, err := strconv.Atoi(limitStr); err == nil && l > 0 && l <= 100 {
+		limit = l
+	}
+
+	// Get transactions from MongoDB
+	transactions, err := h.transactionService.GetUserTransactions(c.Request.Context(), fmt.Sprintf("%v", userID), limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve transactions",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"transactions": transactions,
+		"count":        len(transactions),
+		"user_id":      fmt.Sprintf("%v", userID),
+		"limit":        limit,
 	})
 }

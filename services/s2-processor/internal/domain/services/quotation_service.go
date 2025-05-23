@@ -53,3 +53,8 @@ func (s *QuotationService) validateQuotation(quotation *models.Quotation) error 
 
 	return nil
 }
+
+// GetLatestByCurrencyPair retrieves the most recent quotation for a specific currency pair
+func (s *QuotationService) GetLatestByCurrencyPair(ctx context.Context, currencyPair string) (*models.Quotation, error) {
+	return s.quotationRepo.GetLatestByCurrencyPair(ctx, currencyPair)
+}

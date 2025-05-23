@@ -14,7 +14,7 @@ import (
 
 func main() {
 	// Initialize Cassandra connection
-	cluster := gocql.NewCluster("cassandra:9042")
+	cluster := gocql.NewCluster("localhost:9042")
 	cluster.Keyspace = "financial"
 	cluster.Consistency = gocql.Quorum
 
@@ -28,7 +28,7 @@ func main() {
 	transactionRepo := repositories.NewTransactionRepository(session)
 
 	// Initialize RabbitMQ connection
-	rabbitmqURI := "amqp://guest:guest@rabbitmq:5672/"
+	rabbitmqURI := "amqp://guest:guest@localhost:5672/"
 
 	// Initialize consumers
 	transactionConsumer := messaging.NewTransactionConsumer(rabbitmqURI, transactionRepo)

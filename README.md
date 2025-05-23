@@ -245,6 +245,26 @@ curl -X GET http://localhost:8080/transactions \
 
 • Escalabilidade horizontal para lidar com grandes volumes de dados históricos.
 
+### Cassandra (DB2)
+
+**Dados armazenados**: Logs de validação, auditoria de transações e histórico de eventos.
+
+**Justificativa:**
+
+• O Cassandra é um banco de dados NoSQL distribuído projetado para alta disponibilidade e escalabilidade;
+
+• Ideal para armazenar grandes volumes de dados de log e auditoria;
+
+• Excelente performance para operações de escrita intensiva (logging);
+
+• Oferece replicação automática e tolerância a falhas;
+
+• Permite consultas eficientes por timestamp para análise temporal;
+
+• Estrutura otimizada para dados de séries temporais e eventos;
+
+• Escalabilidade linear para lidar com crescimento de dados de auditoria.
+
 ## Configuração e Execução
 
 ### Pré-requisitos
@@ -307,21 +327,34 @@ MONGODB_DATABASE=financial
 docker-compose up -d
 ```
 
-#### 2. Executar as Migrações (se necessário)
+#### 2. Configurar o Schema do Cassandra
+
+```bash
+docker exec -i $(docker ps -q --filter "ancestor=cassandra:latest") cqlsh < setup_cassandra.cql
+```
+
+#### 3. Executar as Migrações (se necessário)
 
 ```bash
 cd services/s2-processor/internal/infra/database/migrations
 tern migrate
 ```
 
-#### 3. Iniciar o S2-Processor (Consumidores)
+#### 4. Iniciar o S2-Processor (Consumidores)
 
 ```bash
 cd services/s2-processor
 go run cmd/main.go
 ```
 
-#### 4. Iniciar o S1-Generator (API HTTP)
+#### 5. Iniciar o S3-Validator (Logs e Auditoria)
+
+```bash
+cd services/s3-validator
+go run cmd/main.go
+```
+
+#### 6. Iniciar o S1-Generator (API HTTP)
 
 ```bash
 cd services/s1-generator
@@ -487,6 +520,73 @@ SELECT * FROM users WHERE id = $1;
    - Mantenha as migrações no controle de versão
    - Documente alterações significativas no esquema
    - Nunca modifique migrações já aplicadas em produção
+
+### Configuração do Cassandra
+
+O projeto utiliza Cassandra para armazenar logs de validação e auditoria das transações no serviço s3-validator.
+
+#### Iniciando o Cassandra
+
+O Cassandra é iniciado automaticamente junto com os outros serviços:
+
+```bash
+docker-compose up -d
+```
+
+#### Configurando o Schema
+
+Após iniciar o Cassandra, é necessário criar o keyspace e as tabelas necessárias:
+
+1. **Executar o Script de Setup:**
+
+```bash
+docker exec -i $(docker ps -q --filter "ancestor=cassandra:latest") cqlsh < setup_cassandra.cql
+```
+
+2. **Verificar se o Keyspace foi Criado:**
+
+```bash
+docker exec -it $(docker ps -q --filter "ancestor=cassandra:latest") cqlsh -e "DESCRIBE KEYSPACES;"
+```
+
+3. **Verificar as Tabelas:**
+
+```bash
+docker exec -it $(docker ps -q --filter "ancestor=cassandra:latest") cqlsh -e "USE financial; DESCRIBE TABLES;"
+```
+
+#### Estrutura do Schema
+
+O arquivo `setup_cassandra.cql` cria:
+
+- **Keyspace `financial`**: Com replicação simples para desenvolvimento
+- **Tabela `transactions`**: Para armazenar cópias das transações para auditoria
+- **Tabela `validation_logs`**: Para logs de validação e eventos do sistema
+- **Índices**: Para otimizar consultas por `user_id`, `status` e `transaction_id`
+
+#### Comandos Úteis do Cassandra
+
+1. **Acessar o CQL Shell:**
+
+```bash
+docker exec -it $(docker ps -q --filter "ancestor=cassandra:latest") cqlsh
+```
+
+2. **Consultar Dados:**
+
+```cql
+USE financial;
+SELECT * FROM transactions LIMIT 10;
+SELECT * FROM validation_logs LIMIT 10;
+```
+
+3. **Limpar Dados (Desenvolvimento):**
+
+```cql
+USE financial;
+TRUNCATE transactions;
+TRUNCATE validation_logs;
+```
 
 ## Observações de Segurança
 

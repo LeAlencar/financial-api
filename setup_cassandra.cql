@@ -20,17 +20,24 @@ CREATE TABLE IF NOT EXISTS transactions (
     updated_at TIMESTAMP
 );
 
--- Create validation_logs table
+-- Create validation_logs table with complete structure
 CREATE TABLE IF NOT EXISTS validation_logs (
     id UUID PRIMARY KEY,
-    transaction_id UUID,
-    validation_type TEXT,
-    result TEXT,
+    event_type TEXT,
+    action TEXT,
+    event_id TEXT,
+    user_id TEXT,
+    status TEXT,
     message TEXT,
-    created_at TIMESTAMP
+    details MAP<TEXT, TEXT>,
+    raw_payload TEXT,
+    processed_at TIMESTAMP,
+    source TEXT
 );
 
 -- Create indexes
 CREATE INDEX IF NOT EXISTS ON transactions (user_id);
 CREATE INDEX IF NOT EXISTS ON transactions (status);
-CREATE INDEX IF NOT EXISTS ON validation_logs (transaction_id); 
+CREATE INDEX IF NOT EXISTS ON validation_logs (event_type);
+CREATE INDEX IF NOT EXISTS ON validation_logs (status);
+CREATE INDEX IF NOT EXISTS ON validation_logs (user_id); 

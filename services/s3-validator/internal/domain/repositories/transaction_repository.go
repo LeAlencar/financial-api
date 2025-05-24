@@ -19,7 +19,7 @@ func NewTransactionRepository(session *gocql.Session) *TransactionRepository {
 }
 
 func (r *TransactionRepository) Save(ctx context.Context, transaction *models.Transaction) error {
-	query := `INSERT INTO transactions (id, user_id, type, currency, amount, status, timestamp) 
+	query := `INSERT INTO transactions (id, user_id, transaction_type, currency, amount, status, created_at) 
 			  VALUES (?, ?, ?, ?, ?, ?, ?)`
 
 	return r.session.Query(query,
@@ -35,7 +35,7 @@ func (r *TransactionRepository) Save(ctx context.Context, transaction *models.Tr
 
 func (r *TransactionRepository) GetByID(ctx context.Context, id string) (*models.Transaction, error) {
 	var transaction models.Transaction
-	query := `SELECT id, user_id, type, currency, amount, status, timestamp 
+	query := `SELECT id, user_id, transaction_type, currency, amount, status, created_at 
 			  FROM transactions WHERE id = ?`
 
 	err := r.session.Query(query, id).WithContext(ctx).Scan(
@@ -60,7 +60,7 @@ func (r *TransactionRepository) GetByID(ctx context.Context, id string) (*models
 
 func (r *TransactionRepository) GetByUserID(ctx context.Context, userID string) ([]*models.Transaction, error) {
 	var transactions []*models.Transaction
-	query := `SELECT id, user_id, type, currency, amount, status, timestamp 
+	query := `SELECT id, user_id, transaction_type, currency, amount, status, created_at 
 			  FROM transactions WHERE user_id = ?`
 
 	iter := r.session.Query(query, userID).WithContext(ctx).Iter()
